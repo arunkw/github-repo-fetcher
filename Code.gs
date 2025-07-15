@@ -12,19 +12,21 @@ function fetchGitHubRepos() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
 
-  // Create header if empty
+  // Create header if needed
   if (data.length < 1 || data[0][0] !== "Repo Name") {
     sheet.clearContents();
     sheet.appendRow(["Repo Name", "Description", "Notes"]);
     data = [["Repo Name", "Description", "Notes"]];
   }
 
-  // Build a map of existing repo names and their row index
+  // Build a map of existing repo names to row index
   var repoMap = {};
   for (var i = 1; i < data.length; i++) {
-    var repoName = data[i][0];
-    if (repoName) {
-      repoMap[repoName] = i + 1; // 1-based row index
+    var cell = data[i][0];
+    if (cell && cell !== "") {
+      var match = cell.match(/"(.+)"\)$/); // extract "repo" from HYPERLINK
+      var repoName = match ? match[1] : cell;
+      repoMap[repoName] = i + 1; // rows are 1-indexed
     }
   }
 
@@ -54,21 +56,24 @@ function fetchGitHubRepos() {
   for (var j = 0; j < allRepos.length; j++) {
     var repo = allRepos[j];
     var name = repo.name;
+    var url = repo.html_url;
     var description = repo.description || "";
+    var formula = `=HYPERLINK("${url}", "${name}")`;
 
     if (repoMap[name]) {
-      // Repo already exists → update name & description only, keep notes
-      sheet.getRange(repoMap[name], 1).setValue(name);
-      sheet.getRange(repoMap[name], 2).setValue(description);
+      // Update existing row (preserve notes)
+      var row = repoMap[name];
+      sheet.getRange(row, 1).setFormula(formula);
+      sheet.getRange(row, 2).setValue(description);
     } else {
-      // New repo → append
-      sheet.appendRow([name, description, ""]);
+      // Append new row
+      sheet.appendRow([formula, description, ""]);
     }
 
     updatedCount++;
   }
 
-  ui.alert(`Fetched ${updatedCount} repositories for "${username}". Notes in Column C were preserved.`);
+  ui.alert(`Fetched ${updatedCount} repositories for "${username}". Repo names are now clickable. Notes were preserved.`);
 }
 
 function onOpen() {
